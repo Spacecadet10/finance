@@ -1615,7 +1615,7 @@ async function linkBackupFolder(){
   if(!canFolderBackup()){ toast('This browser cannot write to a folder — choose a single file instead'); return; }
   try{
     const h=await window.showDirectoryPicker({mode:'readwrite',id:'ledger-backup',startIn:'documents'});
-    backupHandle=h; backupKind='dir'; backupState='on'; lastDiskError=''; await idbSet('backup',h);
+    backupHandle=h; backupKind='dir'; backupState='on'; lastDiskError=''; await idbSet('backup',h); S.settings.backupWasOn=true; save();
     await writeBackupFile(); save(); render(); refreshSettings();
     toast(lastDiskError?'Could not write to that folder':'Live backup on — writing '+LIVE_NAME+' and dated copies into '+h.name);
   }catch(e){ if(e&&e.name!=='AbortError'){ lastDiskError=errStr(e); toast('Could not set up the backup folder — '+errStr(e)); refreshSettings(); } }
@@ -1624,7 +1624,7 @@ async function linkBackupFile(){
   if(!canLiveBackup()){ toast('This browser cannot keep a live file — use Back up everything instead'); return; }
   try{
     const h=await window.showSaveFilePicker({suggestedName:'ledger-backup.json',types:[{description:'Ledger backup',accept:{'application/json':['.json']}}]});
-    backupHandle=h; backupKind='file'; backupState='on'; lastDiskError=''; await idbSet('backup',h);
+    backupHandle=h; backupKind='file'; backupState='on'; lastDiskError=''; await idbSet('backup',h); S.settings.backupWasOn=true; save();
     await writeBackupFile(); save(); render(); refreshSettings();
     toast('Live backup on — every change is written to '+h.name);
   }catch(e){ if(e&&e.name!=='AbortError'){ lastDiskError=errStr(e); toast('Could not set up the backup file — '+errStr(e)); refreshSettings(); } }
@@ -1634,7 +1634,7 @@ async function reconnectBackup(){
   try{ const p=await backupHandle.requestPermission({mode:'readwrite'}); if(p==='granted'){ backupState='on'; lastDiskError=''; await writeBackupFile(); render(); refreshSettings(); toast('Live backup reconnected'); } }
   catch(e){ toast('Could not reconnect the backup'); }
 }
-async function unlinkBackup(){ backupHandle=null; backupKind=''; backupState='off'; lastDiskWrite=0; lastDiskVerified=false; lastDiskError=''; backupDiag=null; await idbDel('backup'); render(); refreshSettings(); toast('Live backup off'); }
+async function unlinkBackup(){ backupHandle=null; backupKind=''; backupState='off'; S.settings.backupWasOn=false; save(); lastDiskWrite=0; lastDiskVerified=false; lastDiskError=''; backupDiag=null; await idbDel('backup'); render(); refreshSettings(); toast('Live backup off'); }
 async function writeText(fileHandle,text){ const w=await fileHandle.createWritable(); await w.write(text); await w.close(); }
 /* on the switch to (or a rotation of) encryption, every dated snapshot in the backup folder is rewritten sealed: a
    plain copy of the book must not sit next to the encrypted one. Files copied elsewhere earlier stay as they were. */

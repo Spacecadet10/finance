@@ -765,6 +765,34 @@ suite('api keys encrypted at rest',async()=>{
   check(!(w.localStorage.getItem('ledger-v1')||'').includes('sk-ant-secret-123'),'still never in the book');
 });
 
+suite('a live backup that stops is not silent',async()=>{
+  const {L,S,d,w}=await boot();
+  S.transactions=[tx('t1','2026-09-01',10,'out','c3','a1')];
+  L.render(); check(!d.getElementById('backuplost'),'no warning for someone who never set one up');
+  /* they did set one up, and the browser has since let go of the folder handle */
+  S.settings.backupWasOn=true; S.settings.lastBackup=Date.parse('2026-08-30T15:52:00Z');
+  L.render();
+  const bar=d.getElementById('backuplost');
+  check(!!bar,'the bar appears as soon as a configured backup is no longer connected');
+  check(/live backup has stopped/i.test(bar.textContent),'it says the backup stopped');
+  check(/August/.test(bar.textContent)&&/30/.test(bar.textContent),'and when it last wrote');
+  check(!!bar.querySelector('[data-act="export-json"]'),'always offers a backup you can take right now');
+  check(!L.canFolderBackup()||!!bar.querySelector('[data-act="backup-link-folder"]'),'offers the folder again where the browser supports it');
+  check(!!bar.querySelector('[data-act="backup-forget"]'),'and a way to stop being reminded');
+  eq(bar.querySelectorAll('b').length,2,'the lead and the date are both bold');
+  { const css=fs.readFileSync(path.join(__dirname,'..','ledger.css'),'utf8');
+    check(/\.alertbar>b:first-child\{display:block/.test(css),'only the lead sentence is a block, so a date mid-sentence does not break the line');
+    check(!/\.alertbar b\{display:block/.test(css),'the old unscoped rule is gone'); }
+  eq(bar.getAttribute('role'),'alert','announced, not decorative');
+  check(!d.getElementById('backupbar'),'the generic nudge does not double up on it');
+  /* the gap that let this go unnoticed: the old nudge waited 30 days */
+  const days=(Date.now()-S.settings.lastBackup)/86400000;
+  check(days<30,'this book is only '+Math.round(days)+' days stale — the old nudge would still be silent');
+  /* turning it off deliberately must not nag */
+  S.settings.backupWasOn=false; L.render();
+  check(!d.getElementById('backuplost'),'no bar once it is deliberately off');
+});
+
 (async()=>{
   const only=process.argv.slice(2);
   for(const s of suites){ if(only.length&&!only.some(o=>s.name.indexOf(o)>=0)) continue; cur=s.name; const p0=pass,f0=fail; try{ await s.fn(); }catch(e){ fail++; failures.push(cur+': threw '+e.message); console.log('  FAIL '+cur+': threw '+(e.stack||e.message).split('\n').slice(0,2).join(' | ')); } console.log((fail>f0?'✗ ':'✓ ')+s.name+'  '+(pass-p0)+' ok'+(fail>f0?', '+(fail-f0)+' failed':'')); }

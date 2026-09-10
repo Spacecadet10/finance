@@ -663,7 +663,7 @@ label.field>span{display:block;font-size:12px;letter-spacing:.1em;text-transform
   background:color-mix(in srgb,var(--out) 10%,transparent);
   font-size:14px;line-height:1.5;color:var(--ink);
 }
-.alertbar b{display:block;margin-bottom:2px}
+.alertbar>b:first-child{display:block;margin-bottom:2px}   /* the lead sentence is the heading; a <b> later in the text stays inline */
 .alertbar.soft{border-color:var(--rule-strong);background:var(--surface-2);color:var(--ink-2)}
 .alertbar.soft b{color:var(--ink)}
 .toast-undo{background:none;border:0;color:var(--pop);font-family:var(--ui);font-size:14px;
@@ -999,7 +999,7 @@ html[data-text="xl"] .sheet.wide{width:min(760px,calc(100% / 1.25))}
 <div id="modalRoot"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script>window.LEDGER_DIST={version:"2026.09.10-13",built:"2026-09-10T01:38:51.358Z"};</script>
+<script>window.LEDGER_DIST={version:"2026.09.10-14",built:"2026-09-10T01:50:42.553Z"};</script>
 <script>/**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page
@@ -1057,7 +1057,7 @@ const KEY='ledger-v1';
 const LOCK_DEFAULT=300;   /* auto-lock after five idle minutes: long enough to enter a month of transactions in peace */
 const PASS_MIN=10;   /* a shared file is an offline guessing target: ten characters minimum */
 const REIMPORT_MIN=4;   /* below this a batch is too small for "most of it matches" to mean anything */
-const APP_VERSION='2026.09.10-13';
+const APP_VERSION='2026.09.10-14';
 /* ---------- diagnostics logger: a no-op unless debug mode is on ---------- */
 const DLOG_KEY='ledger-debuglog', DLOG_MAX=1000;
 let DLOG=[], dlogTimer=null, dlogLoaded=false;
@@ -3711,6 +3711,24 @@ function render(){
       document.body.insertBefore(pb,document.getElementById('board'));
     }
   }else if(pb){ pb.remove(); }
+  /* A live backup that quietly stops is worse than never having had one: you believe you are covered.
+     'ask' has its own bar above; this is the other way it ends — the folder handle is gone from the
+     browser (site data cleared, a new profile, a reset), so nothing is even asking for permission. */
+  let lb2=document.getElementById('backuplost');
+  const backupLost=S.settings.backupWasOn&&backupState==='off'&&STORAGE_WHERE!=='memory';
+  if(backupLost){
+    if(!lb2){
+      lb2=document.createElement('div'); lb2.id='backuplost'; lb2.className='alertbar'; lb2.setAttribute('role','alert');
+      const last=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleDateString(undefined,{day:'numeric',month:'long'}):'';
+      lb2.innerHTML='<b>Your live backup has stopped.</b>Ledger no longer has the folder you chose — the browser lets go of it when site data is cleared, or in a different profile. '
+        +(last?'Nothing has been written to disk since <b>'+esc(last)+'</b>. ':'Nothing has been written to disk. ')
+        +'Everything since then exists only in this browser. '
+        +(canFolderBackup()?'<button class="btn btn-sm btn-primary" data-act="backup-link-folder" style="margin-top:9px">Pick the folder again</button> ':'')
+        +'<button class="btn btn-sm" data-act="export-json" style="margin-top:9px">Download a backup now</button> '
+        +'<button class="btn btn-sm btn-ghost" data-act="backup-forget" style="margin-top:9px">Stop reminding me</button>';
+      const board=document.getElementById('board'); if(board&&board.parentNode) board.parentNode.insertBefore(lb2,board);
+    }
+  }else if(lb2){ lb2.remove(); }
   /* the two failures a person must not miss: the stored book could not be read, or writes are failing */
   let cb=document.getElementById('corruptbar');
   if(bootCorrupt){ if(!cb){ cb=document.createElement('div'); cb.id='corruptbar'; cb.className='alertbar'; cb.setAttribute('role','alert');
@@ -3731,7 +3749,7 @@ function render(){
   const days=S.settings.lastBackup?(Date.now()-S.settings.lastBackup)/86400000:Infinity;
   const snoozed=S.settings.backupNudged&&(Date.now()-S.settings.backupNudged)<(isDist()?7:14)*86400000;
   const realRows=S.transactions.filter(t=>t.source!=='sample').length;   /* a sample book is nothing to lose */
-  const wantNudge=STORAGE_WHERE!=='memory'&&!snoozed&&(isDist()?(realRows>=5&&days>7):(realRows>=25&&days>30));
+  const wantNudge=STORAGE_WHERE!=='memory'&&!snoozed&&!backupLost&&(isDist()?(realRows>=5&&days>7):(realRows>=25&&days>30));   /* the lost-backup bar above says it better and sooner */
   if(wantNudge){
     if(!nb){
       nb=document.createElement('div'); nb.id='backupbar'; nb.className='alertbar soft';
@@ -7134,7 +7152,7 @@ async function linkBackupFolder(){
   if(!canFolderBackup()){ toast('This browser cannot write to a folder — choose a single file instead'); return; }
   try{
     const h=await window.showDirectoryPicker({mode:'readwrite',id:'ledger-backup',startIn:'documents'});
-    backupHandle=h; backupKind='dir'; backupState='on'; lastDiskError=''; await idbSet('backup',h);
+    backupHandle=h; backupKind='dir'; backupState='on'; lastDiskError=''; await idbSet('backup',h); S.settings.backupWasOn=true; save();
     await writeBackupFile(); save(); render(); refreshSettings();
     toast(lastDiskError?'Could not write to that folder':'Live backup on — writing '+LIVE_NAME+' and dated copies into '+h.name);
   }catch(e){ if(e&&e.name!=='AbortError'){ lastDiskError=errStr(e); toast('Could not set up the backup folder — '+errStr(e)); refreshSettings(); } }
@@ -7143,7 +7161,7 @@ async function linkBackupFile(){
   if(!canLiveBackup()){ toast('This browser cannot keep a live file — use Back up everything instead'); return; }
   try{
     const h=await window.showSaveFilePicker({suggestedName:'ledger-backup.json',types:[{description:'Ledger backup',accept:{'application/json':['.json']}}]});
-    backupHandle=h; backupKind='file'; backupState='on'; lastDiskError=''; await idbSet('backup',h);
+    backupHandle=h; backupKind='file'; backupState='on'; lastDiskError=''; await idbSet('backup',h); S.settings.backupWasOn=true; save();
     await writeBackupFile(); save(); render(); refreshSettings();
     toast('Live backup on — every change is written to '+h.name);
   }catch(e){ if(e&&e.name!=='AbortError'){ lastDiskError=errStr(e); toast('Could not set up the backup file — '+errStr(e)); refreshSettings(); } }
@@ -7153,7 +7171,7 @@ async function reconnectBackup(){
   try{ const p=await backupHandle.requestPermission({mode:'readwrite'}); if(p==='granted'){ backupState='on'; lastDiskError=''; await writeBackupFile(); render(); refreshSettings(); toast('Live backup reconnected'); } }
   catch(e){ toast('Could not reconnect the backup'); }
 }
-async function unlinkBackup(){ backupHandle=null; backupKind=''; backupState='off'; lastDiskWrite=0; lastDiskVerified=false; lastDiskError=''; backupDiag=null; await idbDel('backup'); render(); refreshSettings(); toast('Live backup off'); }
+async function unlinkBackup(){ backupHandle=null; backupKind=''; backupState='off'; S.settings.backupWasOn=false; save(); lastDiskWrite=0; lastDiskVerified=false; lastDiskError=''; backupDiag=null; await idbDel('backup'); render(); refreshSettings(); toast('Live backup off'); }
 async function writeText(fileHandle,text){ const w=await fileHandle.createWritable(); await w.write(text); await w.close(); }
 /* on the switch to (or a rotation of) encryption, every dated snapshot in the backup folder is rewritten sealed: a
    plain copy of the book must not sit next to the encrypted one. Files copied elsewhere earlier stay as they were. */
@@ -7991,6 +8009,7 @@ document.addEventListener('click',function(e){
     case 'backup-link-folder': linkBackupFolder(); break;
     case 'backup-test': backupSelfTest(); break;
     case 'backup-reconnect': reconnectBackup(); break;
+    case 'backup-forget': S.settings.backupWasOn=false; save(); render(); toast('Stopped reminding you — Settings › Data still has the backup options'); break;
     case 'backup-unlink': unlinkBackup(); break;
     case 'add-recurring': recurringForm(); break;
     case 'rec-review': recurringSuggestModal(); break;
@@ -8298,7 +8317,7 @@ document.addEventListener('drop',e=>{
 });
 
 /* test hook — read-only access to the engine for the automated tests in tests/ */
-window.__ledger={get S(){return S;},get stagedAccount(){return stagedAccount;},set commitFailAt(v){commitFailAt=v;},saveNow,discardReview,absorbIntoAnchors,unreadLines,twinTransfer,dayBefore,openingFloor,rebookByNumber,lineNamesAccount,numberedAccount,RX_OWN_SCREEN,shotKindClash,isCardPayIn,unsourcedPayments,summaryKey,get myRev(){return myRev;},get staleTab(){return staleTab;},storedRev,unreconciledLiabilities,netWorthIncompleteNote,incomeRecognised,allocSign,applyRestore,txById,isReversal,isReversed,reversalPartner,reversalPairOk,linkReversal,unlinkReversal,reversalCandidates,autoLinkReversals,economicIn,economicOut,reversalLabel,saysReversal,todayISO,unreconciledNote,PDFJS_VERSION,PDFJS_DIR,ensurePdfjs,pdfItemsToText,extractPdfText,get pdfPagesRead(){return pdfPagesRead;},segmentStatement,statementPeriod,parseOCRText,appOrigin,isCanonical,originLabel,originBadge,CANONICAL_URL,statementReconcile,refreshCommitGate,bankHint,merchantPart,channelOf,guessCategory,detectAcctType,statementHeader,matchAccounts,inDebtPlan,debts,debtCandidates,setDebtPlanFlag,simulate,offerLoanLink,monthFlows,allocLabel,allocAssigned,setCheckpoint,allocOf,isLoanPayment,allocPrincipal,allocExpenses,allocEscrow,allocUnresolved,allocState,allocSummary,spendParts,monthLoanPrincipal,monthUnresolved,isInstallmentLoan,proposeAllocation,applyAllocationProposal,isFuture,futureCheckpoints,countsFor,netWorthAt,netWorthSeries,netWorthSeriesAt,valueAt,existsAt,historyStart,undatedAccounts,monthEnd,monthsBack,shiftMonth,balanceSheet,untypedAccounts,suggestAcctType,linksOf,acctGroup,typeKind,acctTypeLabel,ACCT_TYPES,addShotFiles,contentHash,classifyDups,isDup,dupLevel,descKey,srcKey,refFromText,txFingerprint,netWorth,hintType,suggestAccount,applyAccountSemantics,get revRows(){return revRows;},recatPreview,recatApply,transferTargets,getKey,setKey,openKeys,flushKeys,forgetKeys,keysSealed,guessCategory,uncatId,dlog,get DLOG(){ if(!dlogLoaded) loadDlog(); return DLOG; },clearDlog,integrityCheck,explainRules,balanceExplain,repairPlans,fullBackupDiagnostic,validateBackupShape,get importTrace(){return importTrace;},APP_VERSION,detectRecurring,merchantKey,suggestionToRecurring,balanceAsOf,historyFP,closeStatus,closeReview,ensureClose,occurrences,nextDue,removeCheckpoint,governingCheckpoint,effectOn,derivedBalance,recalcBalances,ensureAnchors,setCheckpoint,setBalanceTo,balanceReport,anchorOf,sniffHint,matchAccount,get hint(){return shotHint;},extractWithOpenRouter,extractWithClaude,aiProvider,aiKey,aiModel,get backup(){return {state:backupState,kind:backupKind,lastDiskWrite:lastDiskWrite,lastLocalSave:lastLocalSave,verified:lastDiskVerified,error:lastDiskError,diag:backupDiag};},writeBackupFile,backupSelfTest,get ui(){return ui;},get lastFocus(){return lastFocus;},get lockWiped(){return lockWiped;},lockDown,resealBackups,passphraseSetupForm,LOCK_DEFAULT,PASS_MIN,cat,lockOffer,mergePlan,mergeBook,extractBookText,guideSteps,THEMES,themeOf,sealState,openSealed,isEnvelope,vaultOn,setLockPassphrase,verifyLockPassphrase,unlockWith,changePassphrase,newRecoveryCodeForVault,looksLikeRecovery,normRecovery,lockEncrypts,loadLock,applyRestore,get lastUnlockHow(){return lastUnlockHow;},get pendingUnlock(){return !!pendingUnlock;},personForm,removePerson,MAX_USERS,selfHTML,embeddedBook,adoptEmbeddedData,exportSelf,isDist,isCanonical,appOrigin,toBase,rateOf,bulkAssignMatches,get bulkUI(){return bulkUI;},bulkAssignApply,bulkAssignPreview,inMonth,inMonthMine,monthFlowsMine,flowsOf,householdRows,filteredUserId,memberFilterOn,txUserVisible,runRecurring,matchRule,applyRule,rulesRunPreview,merchantGuess,projection,goalMath,avgFlows,avgNeed,simulate,save,render,refreshWhatIf,load,healState,html,uid,esc};
+window.__ledger={get S(){return S;},get stagedAccount(){return stagedAccount;},set commitFailAt(v){commitFailAt=v;},saveNow,discardReview,absorbIntoAnchors,unreadLines,twinTransfer,dayBefore,openingFloor,rebookByNumber,lineNamesAccount,numberedAccount,RX_OWN_SCREEN,shotKindClash,isCardPayIn,unsourcedPayments,summaryKey,get myRev(){return myRev;},get staleTab(){return staleTab;},storedRev,unreconciledLiabilities,netWorthIncompleteNote,incomeRecognised,allocSign,applyRestore,txById,isReversal,isReversed,reversalPartner,reversalPairOk,linkReversal,unlinkReversal,reversalCandidates,autoLinkReversals,economicIn,economicOut,reversalLabel,saysReversal,todayISO,unreconciledNote,PDFJS_VERSION,PDFJS_DIR,ensurePdfjs,pdfItemsToText,extractPdfText,get pdfPagesRead(){return pdfPagesRead;},segmentStatement,statementPeriod,parseOCRText,appOrigin,isCanonical,originLabel,originBadge,CANONICAL_URL,statementReconcile,refreshCommitGate,bankHint,merchantPart,channelOf,guessCategory,detectAcctType,statementHeader,matchAccounts,inDebtPlan,debts,debtCandidates,setDebtPlanFlag,simulate,offerLoanLink,monthFlows,allocLabel,allocAssigned,setCheckpoint,allocOf,isLoanPayment,allocPrincipal,allocExpenses,allocEscrow,allocUnresolved,allocState,allocSummary,spendParts,monthLoanPrincipal,monthUnresolved,isInstallmentLoan,proposeAllocation,applyAllocationProposal,isFuture,futureCheckpoints,countsFor,netWorthAt,netWorthSeries,netWorthSeriesAt,valueAt,existsAt,historyStart,undatedAccounts,monthEnd,monthsBack,shiftMonth,balanceSheet,untypedAccounts,suggestAcctType,linksOf,acctGroup,typeKind,acctTypeLabel,ACCT_TYPES,addShotFiles,contentHash,classifyDups,isDup,dupLevel,descKey,srcKey,refFromText,txFingerprint,netWorth,hintType,suggestAccount,applyAccountSemantics,get revRows(){return revRows;},recatPreview,recatApply,transferTargets,getKey,setKey,openKeys,flushKeys,forgetKeys,keysSealed,guessCategory,uncatId,dlog,get DLOG(){ if(!dlogLoaded) loadDlog(); return DLOG; },clearDlog,integrityCheck,explainRules,balanceExplain,repairPlans,fullBackupDiagnostic,validateBackupShape,get importTrace(){return importTrace;},APP_VERSION,detectRecurring,merchantKey,suggestionToRecurring,balanceAsOf,historyFP,closeStatus,closeReview,ensureClose,occurrences,nextDue,removeCheckpoint,governingCheckpoint,effectOn,derivedBalance,recalcBalances,ensureAnchors,setCheckpoint,setBalanceTo,balanceReport,anchorOf,sniffHint,matchAccount,get hint(){return shotHint;},extractWithOpenRouter,extractWithClaude,aiProvider,aiKey,aiModel,get backup(){return {state:backupState,kind:backupKind,lastDiskWrite:lastDiskWrite,lastLocalSave:lastLocalSave,verified:lastDiskVerified,error:lastDiskError,diag:backupDiag};},writeBackupFile,backupSelfTest,canFolderBackup,canLiveBackup,get ui(){return ui;},get lastFocus(){return lastFocus;},get lockWiped(){return lockWiped;},lockDown,resealBackups,passphraseSetupForm,LOCK_DEFAULT,PASS_MIN,cat,lockOffer,mergePlan,mergeBook,extractBookText,guideSteps,THEMES,themeOf,sealState,openSealed,isEnvelope,vaultOn,setLockPassphrase,verifyLockPassphrase,unlockWith,changePassphrase,newRecoveryCodeForVault,looksLikeRecovery,normRecovery,lockEncrypts,loadLock,applyRestore,get lastUnlockHow(){return lastUnlockHow;},get pendingUnlock(){return !!pendingUnlock;},personForm,removePerson,MAX_USERS,selfHTML,embeddedBook,adoptEmbeddedData,exportSelf,isDist,isCanonical,appOrigin,toBase,rateOf,bulkAssignMatches,get bulkUI(){return bulkUI;},bulkAssignApply,bulkAssignPreview,inMonth,inMonthMine,monthFlowsMine,flowsOf,householdRows,filteredUserId,memberFilterOn,txUserVisible,runRecurring,matchRule,applyRule,rulesRunPreview,merchantGuess,projection,goalMath,avgFlows,avgNeed,simulate,save,render,refreshWhatIf,load,healState,html,uid,esc};
 
 /* ============================ boot ============================ */
 /* scheduled backup: on boot, if 30+ days since last backup and 25+ transactions,

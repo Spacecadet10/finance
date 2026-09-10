@@ -1052,6 +1052,24 @@ function render(){
       document.body.insertBefore(pb,document.getElementById('board'));
     }
   }else if(pb){ pb.remove(); }
+  /* A live backup that quietly stops is worse than never having had one: you believe you are covered.
+     'ask' has its own bar above; this is the other way it ends — the folder handle is gone from the
+     browser (site data cleared, a new profile, a reset), so nothing is even asking for permission. */
+  let lb2=document.getElementById('backuplost');
+  const backupLost=S.settings.backupWasOn&&backupState==='off'&&STORAGE_WHERE!=='memory';
+  if(backupLost){
+    if(!lb2){
+      lb2=document.createElement('div'); lb2.id='backuplost'; lb2.className='alertbar'; lb2.setAttribute('role','alert');
+      const last=S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleDateString(undefined,{day:'numeric',month:'long'}):'';
+      lb2.innerHTML='<b>Your live backup has stopped.</b>Ledger no longer has the folder you chose — the browser lets go of it when site data is cleared, or in a different profile. '
+        +(last?'Nothing has been written to disk since <b>'+esc(last)+'</b>. ':'Nothing has been written to disk. ')
+        +'Everything since then exists only in this browser. '
+        +(canFolderBackup()?'<button class="btn btn-sm btn-primary" data-act="backup-link-folder" style="margin-top:9px">Pick the folder again</button> ':'')
+        +'<button class="btn btn-sm" data-act="export-json" style="margin-top:9px">Download a backup now</button> '
+        +'<button class="btn btn-sm btn-ghost" data-act="backup-forget" style="margin-top:9px">Stop reminding me</button>';
+      const board=document.getElementById('board'); if(board&&board.parentNode) board.parentNode.insertBefore(lb2,board);
+    }
+  }else if(lb2){ lb2.remove(); }
   /* the two failures a person must not miss: the stored book could not be read, or writes are failing */
   let cb=document.getElementById('corruptbar');
   if(bootCorrupt){ if(!cb){ cb=document.createElement('div'); cb.id='corruptbar'; cb.className='alertbar'; cb.setAttribute('role','alert');
@@ -1072,7 +1090,7 @@ function render(){
   const days=S.settings.lastBackup?(Date.now()-S.settings.lastBackup)/86400000:Infinity;
   const snoozed=S.settings.backupNudged&&(Date.now()-S.settings.backupNudged)<(isDist()?7:14)*86400000;
   const realRows=S.transactions.filter(t=>t.source!=='sample').length;   /* a sample book is nothing to lose */
-  const wantNudge=STORAGE_WHERE!=='memory'&&!snoozed&&(isDist()?(realRows>=5&&days>7):(realRows>=25&&days>30));
+  const wantNudge=STORAGE_WHERE!=='memory'&&!snoozed&&!backupLost&&(isDist()?(realRows>=5&&days>7):(realRows>=25&&days>30));   /* the lost-backup bar above says it better and sooner */
   if(wantNudge){
     if(!nb){
       nb=document.createElement('div'); nb.id='backupbar'; nb.className='alertbar soft';

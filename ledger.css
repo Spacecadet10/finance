@@ -648,7 +648,7 @@ label.field>span{display:block;font-size:12px;letter-spacing:.1em;text-transform
   background:color-mix(in srgb,var(--out) 10%,transparent);
   font-size:14px;line-height:1.5;color:var(--ink);
 }
-.alertbar b{display:block;margin-bottom:2px}
+.alertbar>b:first-child{display:block;margin-bottom:2px}   /* the lead sentence is the heading; a <b> later in the text stays inline */
 .alertbar.soft{border-color:var(--rule-strong);background:var(--surface-2);color:var(--ink-2)}
 .alertbar.soft b{color:var(--ink)}
 .toast-undo{background:none;border:0;color:var(--pop);font-family:var(--ui);font-size:14px;
