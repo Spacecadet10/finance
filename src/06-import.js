@@ -1232,11 +1232,18 @@ function classifyDups(rows,opts){
       if(t){ used[t.id]=1; r.dup=level; r.dupOf=t; }
     });
   });
+  /* One row matching something already recorded is ordinary life — two identical coffees on one day.
+     Most of a batch matching is not: it is the same document read a second time, with different bytes
+     (a re-scan, another photo, a fresh export) so no row can be proven definite. Untick the lot. */
+  const cand=rows.filter(r=>!r.edited&&r.type!=='bill');
+  const maybes=cand.filter(r=>r.dup==='possible').length;
+  rows.reimport=cand.length>=REIMPORT_MIN&&maybes*2>cand.length;
   rows.forEach(r=>{
     if(r.edited) return;
     r.flags=(r.flags||[]).filter(f=>!/^possible duplicate/.test(f));
-    if(r.dup==='possible') r.flags.push('possible duplicate — '+fmtDate(r.dupOf.date)+' '+money(r.dupOf.amount)+' “'+(r.dupOf.note||r.dupOf.name||'')+'” is already in the ledger, but no reference id or statement line proves it is the same one. Left ticked: untick it if it is.');
-    r.on=r.dup!=='definite'&&r.amount>0;
+    if(r.dup==='possible') r.flags.push('possible duplicate — '+fmtDate(r.dupOf.date)+' '+money(r.dupOf.amount)+' “'+(r.dupOf.note||r.dupOf.name||'')+'” is already in the ledger, but no reference id or statement line proves it is the same one. '
+      +(rows.reimport?'Unticked: most of this import matches rows you already have, so this looks like the same document again. Tick it if it really is new.':'Left ticked: untick it if it is.'));
+    r.on=r.dup!=='definite'&&!(rows.reimport&&r.dup==='possible')&&r.amount>0;
   });
   return rows;
 }
@@ -1312,7 +1319,8 @@ function renderReview(){
   const dups=revRows.filter(r=>r.dup==='definite').length, maybe=revRows.filter(r=>r.dup==='possible').length;
   const bills=revRows.filter(r=>r.type==='bill').length, flagged=revRows.filter(r=>r.flags&&r.flags.length).length;
   const vague=revRows.filter(r=>r.type!=='bill'&&cat(r.categoryId).id==='c0').length;
-  setShotStatus((pdfPagesRead&&!aiKey()?'<span class="muted">PDF read on this computer — '+pdfPagesRead+' page'+(pdfPagesRead===1?'':'s')+', nothing left your machine.</span> ':'')+'Found '+revRows.length+' item'+(revRows.length===1?'':'s')+(bills?' ('+bills+' upcoming bill'+(bills===1?'':'s')+')':'')+'. Check them over — fix anything, untick what you don\'t want.'+(vague?' <span class="muted">'+vague+' could not be categorised (“Uncategorised”) — pick the right category here and Ledger will offer to remember the merchant.</span>':'')+(dups?' '+dups+(dups===1?' is':' are')+' already in the ledger (same reference id or the same statement line), so '+(dups===1?'it is':'they are')+' unticked.':'')+(maybe?' <b style="color:var(--accent)">'+maybe+' might be '+(maybe===1?'a duplicate':'duplicates')+' — same account, date, amount and merchant as something already recorded, but nothing proves it. Left ticked (⚠): untick if it is the same purchase.</b>':'')+(flagged?' <b style="color:var(--accent)">'+flagged+' marked ⚠ had to be guessed — check the date or in/out before adding.</b>':''));
+  setShotStatus((pdfPagesRead&&!aiKey()?'<span class="muted">PDF read on this computer — '+pdfPagesRead+' page'+(pdfPagesRead===1?'':'s')+', nothing left your machine.</span> ':'')+'Found '+revRows.length+' item'+(revRows.length===1?'':'s')+(bills?' ('+bills+' upcoming bill'+(bills===1?'':'s')+')':'')+'. Check them over — fix anything, untick what you don\'t want.'+(vague?' <span class="muted">'+vague+' could not be categorised (“Uncategorised”) — pick the right category here and Ledger will offer to remember the merchant.</span>':'')+(dups?' '+dups+(dups===1?' is':' are')+' already in the ledger (same reference id or the same statement line), so '+(dups===1?'it is':'they are')+' unticked.':'')+(maybe&&revRows.reimport?' <b style="color:var(--accent)">This looks like a document you have already added.</b> '+maybe+' of these '+(maybe===1?'matches':'match')+' rows already in this account — same date, amount and merchant — but the file itself is different (a re-scan, another photo, a fresh export), so nothing proves it row by row. <b>All '+maybe+' are unticked.</b> Tick any that really are new.':'')
+      +(maybe&&!revRows.reimport?' <b style="color:var(--accent)">'+maybe+' might be '+(maybe===1?'a duplicate':'duplicates')+' — same account, date, amount and merchant as something already recorded, but nothing proves it. Left ticked (⚠): untick if it is the same purchase.</b>':'')+(flagged?' <b style="color:var(--accent)">'+flagged+' marked ⚠ had to be guessed — check the date or in/out before adding.</b>':''));
   const catOpts=t=>S.categories.filter(c=>c.type===(t==='in'?'in':'out')).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   box.innerHTML=`<div class="rev head"><span></span><span>Date</span><span>Description</span><span>Amount</span><span>Add as</span><span>Category</span></div>`+
     revRows.map((r,i)=>`<div class="rev${r.dup==='definite'?' dup':r.dup==='possible'?' maybe':''}${r.flags&&r.flags.length?' flagged':''}" data-r="${i}" ${r.flags&&r.flags.length?'title="'+esc(r.flags.join(' · '))+'"':''}>

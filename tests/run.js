@@ -711,6 +711,31 @@ suite('top-bar lock button',async()=>{
   eq(errors.length,0,'no errors');
 });
 
+suite('duplicates: the same document twice',async()=>{
+  const {L,S}=await boot(); S.accounts=[acct('a1','asset',0)];
+  const mk=(i)=>({date:'2026-07-0'+(i+1),amount:10+i,type:'out',note:'SHOP '+i});
+  S.transactions=Array.from({length:6},(_,i)=>tx('e'+i,mk(i).date,mk(i).amount,'out','c3','a1',{note:mk(i).note,src:'TEXT sha256:'+String(i).repeat(64).slice(0,64),raw:'line '+i}));
+  /* the same bill read again: different bytes, so every row can only ever be "possible" */
+  const again=Array.from({length:6},(_,i)=>Object.assign(mk(i),{src:'TEXT sha256:'+'f'.repeat(64),raw:'other line '+i,on:true}));
+  L.classifyDups(again,{into:'a1'});
+  eq(again.filter(r=>r.dup==='possible').length,6,'every row reads as a possible duplicate');
+  check(again.reimport,'a batch that is mostly duplicates is flagged as a re-import');
+  eq(again.filter(r=>r.on).length,0,'and every one of them is unticked');
+  check(/Unticked: most of this import/.test((again[0].flags||[]).join(' ')),'the row says why it was unticked');
+  /* a real statement that happens to repeat two rows must still come through ticked */
+  const fresh=[mk(0),mk(1)].concat(Array.from({length:6},(_,i)=>({date:'2026-08-0'+(i+1),amount:99+i,type:'out',note:'NEW '+i})))
+    .map(r=>Object.assign({},r,{src:'TEXT sha256:'+'a'.repeat(64),raw:'x'+r.note,on:true}));
+  L.classifyDups(fresh,{into:'a1'});
+  check(!fresh.reimport,'a mostly-new batch is not a re-import');
+  eq(fresh.filter(r=>r.on).length,8,'nothing is unticked in a mostly-new batch');
+  check(fresh.filter(r=>r.dup==='possible').length===2,'the two repeats are still flagged individually');
+  /* too small to judge */
+  const tiny=[mk(0),mk(1)].map(r=>Object.assign({},r,{src:'TEXT sha256:'+'b'.repeat(64),raw:'y'+r.note,on:true}));
+  L.classifyDups(tiny,{into:'a1'});
+  check(!tiny.reimport,'two rows are too few to call a re-import');
+  eq(tiny.filter(r=>r.on).length,2,'and they stay ticked');
+});
+
 (async()=>{
   const only=process.argv.slice(2);
   for(const s of suites){ if(only.length&&!only.some(o=>s.name.indexOf(o)>=0)) continue; cur=s.name; const p0=pass,f0=fail; try{ await s.fn(); }catch(e){ fail++; failures.push(cur+': threw '+e.message); console.log('  FAIL '+cur+': threw '+(e.stack||e.message).split('\n').slice(0,2).join(' | ')); } console.log((fail>f0?'✗ ':'✓ ')+s.name+'  '+(pass-p0)+' ok'+(fail>f0?', '+(fail-f0)+' failed':'')); }
