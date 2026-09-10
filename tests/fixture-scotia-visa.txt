@@ -1,0 +1,35 @@
+Scotiabank
+Scotia Momentum Visa
+Statement date: August 22, 2026
+Account number: 4537 12XX XXXX 9876
+Jamie Example
+
+Summary of your account
+Previous balance $412.30
+Payments & credits $412.30
+Purchases & debits $638.71
+Cash advances $0.00
+Interest $0.00
+Fees $0.00
+New balance $638.71
+Minimum payment $10.00
+Payment due date: September 12, 2026
+Credit limit $5,000.00
+Available credit $4,361.29
+
+Your transactions
+TRANSACTION DATE POSTING DATE DESCRIPTION AMOUNT
+Jul 24 Jul 26 STARBUCKS #2211 TORONTO ON 6.45
+Jul 27 Jul 28 UBER TRIP TORONTO ON 18.90
+Jul 30 Jul 30 PAYMENT - THANK YOU 412.30-
+Aug 02 Aug 04 AMAZON.CA MARKETPLACE 54.99
+Aug 05 Aug 06 LOBLAWS #45 TORONTO ON 122.37
+Aug 09 Aug 11 SPOTIFY 11.99
+Aug 12 Aug 13 ESSO CIRCLE K TORONTO ON 66.01
+Aug 15 Aug 17 THE KEG STEAKHOUSE TORONTO ON 158.00
+Aug 20 Aug 21 CANADIAN TIRE #123 200.00
+New balance $638.71
+
+Interest rates
+Purchases 20.99%
+Cash advances 22.99%

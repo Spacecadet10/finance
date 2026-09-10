@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger — parser self-test</title>
+<link rel="stylesheet" href="ledger.css">
+<style>
+body{padding:30px;font-family:var(--ui);max-width:900px;margin:0 auto}
+h1{font-size:18px;letter-spacing:.1em;text-transform:uppercase}
+.result{margin-top:20px;font-family:var(--mono);font-size:13px;line-height:1.6;white-space:pre-wrap}
+.pass{color:var(--in)} .fail{color:var(--out)} .summary{font-size:15px;margin-top:16px;font-weight:600}
+</style>
+</head>
+<body>
+<h1>Ledger parser self-test</h1>
+<div id="out" class="result">Running…</div>
+<script src="src/01-core.js"></script>
+<script src="src/02-accounting.js"></script>
+<script src="src/03-model.js"></script>
+<script src="src/04-widgets.js"></script>
+<script src="src/05-dialogs.js"></script>
+<script src="src/06-import.js"></script>
+<script src="src/07-app.js"></script>
+<script>
+(function(){
+  const L=window.__ledger;
+  const out=document.getElementById('out');
+  let pass=0,fail=0;
+  const lines=[];
+
+  function test(name,fn){
+    try{ fn(); lines.push('PASS  '+name); pass++; }
+    catch(e){ lines.push('FAIL  '+name+' — '+e.message); fail++; }
+  }
+  function eq(a,b,msg){ if(JSON.stringify(a)!==JSON.stringify(b)) throw new Error((msg||'')+' expected '+JSON.stringify(b)+' got '+JSON.stringify(a)); }
+  function truthy(v,msg){ if(!v) throw new Error(msg||'expected truthy'); }
+
+  // --- guessCategory ---
+  test('guessCategory: INTERNET TRANSFER with no merchant → Transfers & payments out',()=>{
+    const r=L.guessCategory('INTERNET TRANSFER 0000012345','out');
+    truthy(r==='Transfers & payments out','got '+r);
+  });
+  test('guessCategory: INTERNET BILL PAY with no merchant → Transfers & payments out',()=>{
+    const r=L.guessCategory('INTERNET BILL PAY 00000011','out');
+    truthy(r==='Transfers & payments out','got '+r);
+  });
+  test('guessCategory: E-TRANSFER with no merchant → Transfers & payments out',()=>{
+    const r=L.guessCategory('E-TRANSFER 106024490403','out');
+    truthy(r==='Transfers & payments out','got '+r);
+  });
+  test('guessCategory: SERVICE CHARGE → Bank fees & interest',()=>{
+    const r=L.guessCategory('SERVICE CHARGE 123456','out');
+    truthy(r==='Bank fees & interest','got '+r);
+  });
+  test('guessCategory: ATM WITHDRAWAL → Cash withdrawals',()=>{
+    const r=L.guessCategory('ATM WITHDRAWAL 0001','out');
+    truthy(r==='Cash withdrawals','got '+r);
+  });
+  test('guessCategory: merchant name wins over channel',()=>{
+    const r=L.guessCategory('INTERNET TRANSFER 0000012345 LOBLAWS','out');
+    truthy(r==='Groceries','got '+r);
+  });
+  test('guessCategory: PAY City of Ottawa → Taxes & government',()=>{
+    const r=L.guessCategory('PAY City of Ottawa','out');
+    truthy(r==='Taxes & government','got '+r);
+  });
+  test('guessCategory: RETAIL PURCHASE with no merchant → empty (could be anything)',()=>{
+    const r=L.guessCategory('RETAIL PURCHASE 95700100','out');
+    truthy(r===''||r==='Uncategorised','got '+r);
+  });
+
+  // --- channelOf ---
+  test('channelOf: identifies Internet transfer',()=>{
+    truthy(L.channelOf('INTERNET TRANSFER 0000012345')==='Internet transfer','got '+L.channelOf('INTERNET TRANSFER 0000012345'));
+  });
+  test('channelOf: identifies Payroll deposit',()=>{
+    truthy(L.channelOf('PAY ACME CORP')==='Payroll deposit','got '+L.channelOf('PAY ACME CORP'));
+  });
+  test('channelOf: returns empty for unknown',()=>{
+    truthy(L.channelOf('LOBLAWS #1234')==='','got '+L.channelOf('LOBLAWS #1234'));
+  });
+
+  // --- merchantPart ---
+  test('merchantPart: strips channel prefix and reference numbers',()=>{
+    const r=L.merchantPart('INTERNET TRANSFER 0000012345 LOBLAWS');
+    truthy(/LOBLAWS/i.test(r),'got '+r);
+  });
+  test('merchantPart: falls back to original when nothing left',()=>{
+    const r=L.merchantPart('INTERNET TRANSFER 0000012345');
+    truthy(r==='INTERNET TRANSFER 0000012345','got '+r);
+  });
+
+  // --- bankHint ---
+  test('bankHint: detects loan payment',()=>{
+    const h=L.bankHint('LOAN PAYMENT 123456');
+    truthy(h&&h.kind==='loan','got '+JSON.stringify(h));
+  });
+  test('bankHint: detects card payment',()=>{
+    const h=L.bankHint('TO CARD 1234567890');
+    truthy(h&&h.kind==='card','got '+JSON.stringify(h));
+  });
+  test('bankHint: detects reversal',()=>{
+    const h=L.bankHint('E-TRANSFER RECLAIM 011661');
+    truthy(h&&h.kind==='reversal','got '+JSON.stringify(h));
+  });
+  test('bankHint: returns null for ordinary purchase',()=>{
+    const h=L.bankHint('LOBLAWS #1234');
+    truthy(h===null,'got '+JSON.stringify(h));
+  });
+
+  // --- segmentStatement ---
+  test('segmentStatement: finds table region in a statement',()=>{
+    const text='Account Statement\nOpening Balance $1,000.00\n2026-07-14 LOBLAWS $82.10\n2026-07-15 PAYROLL $2,150.00\nClosing Balance $3,067.90';
+    const seg=L.segmentStatement(text);
+    truthy(seg.table.length>=2,'expected 2+ table lines, got '+seg.table.length);
+  });
+  test('segmentStatement: flat document (no table) treats everything as table',()=>{
+    const text='2026-07-14 COFFEE $5.00\n2026-07-15 LUNCH $12.50';
+    const seg=L.segmentStatement(text);
+    truthy(seg.flat||seg.table.length>=2,'expected flat or 2+ table lines');
+  });
+
+  // --- parseOCRText ---
+  test('parseOCRText: extracts dated transactions with amounts',()=>{
+    const text='2026-07-14 LOBLAWS $82.10\n2026-07-15 TIM HORTONS $5.75';
+    const rows=L.parseOCRText(text);
+    truthy(rows.length>=2,'expected 2+ rows, got '+rows.length);
+    truthy(rows[0].amount===82.10,'first amount got '+rows[0].amount);
+    truthy(rows[1].amount===5.75,'second amount got '+rows[1].amount);
+  });
+  test('parseOCRText: does not treat "Total Wine" as a control total',()=>{
+    const text='2026-07-14 Total Wine $84.20\n2026-07-15 Coffee $5.00';
+    const rows=L.parseOCRText(text);
+    const hasTotalWine=rows.some(r=>/Total Wine/i.test(r.description||''));
+    truthy(hasTotalWine,'Total Wine was dropped — isControl false positive');
+  });
+  test('parseOCRText: does not drop second same-amount dated transaction',()=>{
+    const text='2026-07-14 COFFEE $5.00\n2026-07-15 COFFEE $5.00';
+    const rows=L.parseOCRText(text);
+    truthy(rows.length>=2,'expected 2 rows for two $5 coffees, got '+rows.length);
+  });
+
+  // --- uid (crypto.randomUUID) ---
+  test('uid: returns a string of reasonable length',()=>{
+    const id=L.uid?L.uid():'';
+    truthy(typeof id==='string'&&id.length>=8,'got '+id);
+  });
+
+  // --- html tagged template (XSS) ---
+  test('html: escapes interpolated user input',()=>{
+    if(!L.html) return; // only test if accessible
+    const evil='<scr'+'ipt>alert(1)</scr'+'ipt>';
+    const out=L.html(['<div>','</div>'],evil);
+    truthy(out.indexOf('<scr'+'ipt>')<0,'script tag not escaped');
+    truthy(out.indexOf('&lt;scr'+'ipt&gt;')>=0,'script tag should be entity-encoded');
+  });
+
+  lines.push('');
+  lines.push(pass+' passed, '+fail+' failed');
+  out.innerHTML=lines.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  out.innerHTML+='<div class="summary '+(fail?'fail':'pass')+'">'+(fail?'SOME TESTS FAILED':'ALL TESTS PASSED')+'</div>';
+})();
+</script>
+</body>
+</html>

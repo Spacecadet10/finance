@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="daylight">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger — personal finance dashboard</title>
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="stylesheet" href="ledger.css?v=9">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="mark">
+      <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3" width="17" height="18" rx="3"/><path d="M8 3v18"/><path d="M11.5 8.5h5.5M11.5 12.5h5.5M11.5 16.5h3"/></svg>
+      <b>Ledger</b>
+      <span id="markSub">personal finance</span>
+      <span id="saveStat" class="savestat" title="Where your data is right now"></span>
+      <span id="originStat"></span>
+    </div>
+    <div class="monthnav">
+      <button class="iconbtn" data-act="month-prev" aria-label="Previous month">‹</button>
+      <div class="label" id="monthLabel">—</div>
+      <button class="iconbtn" data-act="month-next" aria-label="Next month">›</button>
+    </div>
+    <button class="btn" data-act="month-today" id="todayBtn" hidden>Today</button>
+    <div class="people" id="people" title="Whose transactions to show. Each person enters their own; All users is the household together.">
+      <select id="userFilter" data-act="set-user-filter" aria-label="Whose transactions to show"></select>
+      <button class="btn" data-act="add-person" id="addPersonBtn" title="Add a person to the household">+ Person</button>
+    </div>
+    <button class="btn btn-primary" data-act="import-shots" title="Upload or paste bills, receipts, statements, screenshots — Ledger fills in the transactions">Scan a bill / screenshot</button>
+    <button class="btn" data-act="add-tx" id="addTxBtn">Add transaction</button>
+    <button class="iconbtn" data-act="toggle-theme" aria-label="Switch theme" title="Switch theme">◐</button>
+    <button class="iconbtn" data-act="open-settings" aria-label="Settings" title="Settings">⚙</button>
+  </div>
+  <div class="spectrum" aria-hidden="true">
+    <i style="background:var(--in)"></i>
+    <i style="background:var(--accent)"></i>
+    <i style="background:var(--out)"></i>
+    <i style="background:var(--pop)"></i>
+    <i style="background:var(--ink-2)"></i>
+    <i style="background:var(--rule-strong)"></i>
+  </div>
+</header>
+
+<main class="board" id="board"></main>
+<div id="modalRoot"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="src/01-core.js?v=6"></script>
+<script src="src/02-accounting.js?v=6"></script>
+<script src="src/03-model.js?v=6"></script>
+<script src="src/04-widgets.js?v=6"></script>
+<script src="src/05-dialogs.js?v=6"></script>
+<script src="src/06-import.js?v=6"></script>
+<script src="src/07-app.js?v=6"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+FIRST HARBOR BANK
+Total Checking
+Statement Period 08/01/2026 through 08/31/2026
+Account Number 000123456789
+JAMIE EXAMPLE
+
+Checking Summary
+Beginning Balance $1,204.55
+Deposits and Additions $2,900.00
+Checks Paid $0.00
+ATM & Debit Card Withdrawals $612.33
+Electronic Withdrawals $915.00
+Ending Balance $2,577.22
+
+Transaction Detail
+Date Description Amount Balance
+08/01/2026 Beginning Balance $1,204.55
+08/03/2026 Direct Deposit BLUE RIVER LLC PAYROLL $1,450.00 $2,654.55
+08/04/2026 Card Purchase TRADER JOE'S #512 SEATTLE WA -$88.14 $2,566.41
+08/06/2026 Zelle Payment to Taylor -$115.00 $2,451.41
+08/08/2026 Card Purchase SHELL OIL 57 SEATTLE WA -$52.19 $2,399.22
+08/12/2026 Online Payment PUGET POWER -$140.00 $2,259.22
+08/15/2026 Card Purchase COSTCO WHSE #100 -$212.00 $2,047.22
+08/17/2026 Direct Deposit BLUE RIVER LLC PAYROLL $1,450.00 $3,497.22
+08/20/2026 Online Transfer to Savings -$660.00 $2,837.22
+08/24/2026 Card Purchase NETFLIX.COM -$15.49 $2,821.73
+08/28/2026 Card Purchase WHOLE FOODS SEATTLE WA -$244.51 $2,577.22
+08/31/2026 Ending Balance $2,577.22
