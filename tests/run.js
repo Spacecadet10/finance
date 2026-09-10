@@ -736,6 +736,35 @@ suite('duplicates: the same document twice',async()=>{
   eq(tiny.filter(r=>r.on).length,2,'and they stay ticked');
 });
 
+suite('api keys encrypted at rest',async()=>{
+  const {L,S,w}=await boot();
+  L.setKey('apiKey','sk-ant-secret-123'); await new Promise(r=>setTimeout(r,60));
+  eq(L.getKey('apiKey'),'sk-ant-secret-123','key round-trips with no passphrase');
+  check((w.localStorage.getItem('ledger-keys')||'').includes('sk-ant-secret-123'),'without a passphrase it is stored plainly, as before');
+  check(!L.keysSealed(),'and is not sealed');
+  await L.setLockPassphrase('correcthorse42');
+  const raw=w.localStorage.getItem('ledger-keys')||'';
+  check(!raw.includes('sk-ant-secret-123'),'setting a passphrase seals the existing key out of plain sight');
+  check(L.keysSealed(),'the stored blob is an envelope');
+  eq(L.getKey('apiKey'),'sk-ant-secret-123','and it still reads back while unlocked');
+  check(!(w.localStorage.getItem('ledger-v1')||'').includes('sk-ant-secret-123'),'never inside the book itself');
+  L.setKey('openrouterKey','sk-or-second'); await new Promise(r=>setTimeout(r,60));
+  check(!(w.localStorage.getItem('ledger-keys')||'').includes('sk-or-second'),'a key added while sealed is sealed too');
+  eq(L.getKey('openrouterKey'),'sk-or-second','and reads back');
+  /* rotating the passphrase re-seals rather than orphaning them */
+  await L.changePassphrase('anotherpass99');
+  eq(L.getKey('apiKey'),'sk-ant-secret-123','keys survive a passphrase change');
+  check(!(w.localStorage.getItem('ledger-keys')||'').includes('sk-ant'),'still sealed after the rotation');
+  /* locking forgets them: the overlay hides nothing, the key is simply gone from memory */
+  L.forgetKeys(); eq(L.getKey('apiKey'),'','a locked Ledger cannot read the key');
+  await L.openKeys(); eq(L.getKey('apiKey'),'sk-ant-secret-123','unlocking brings it back');
+  /* removing the passphrase puts them back in reach, still out of the book */
+  await L.setLockPassphrase('');
+  eq(L.getKey('apiKey'),'sk-ant-secret-123','key survives removing the passphrase');
+  check(!L.keysSealed(),'and is stored plainly again');
+  check(!(w.localStorage.getItem('ledger-v1')||'').includes('sk-ant-secret-123'),'still never in the book');
+});
+
 (async()=>{
   const only=process.argv.slice(2);
   for(const s of suites){ if(only.length&&!only.some(o=>s.name.indexOf(o)>=0)) continue; cur=s.name; const p0=pass,f0=fail; try{ await s.fn(); }catch(e){ fail++; failures.push(cur+': threw '+e.message); console.log('  FAIL '+cur+': threw '+(e.stack||e.message).split('\n').slice(0,2).join(' | ')); } console.log((fail>f0?'✗ ':'✓ ')+s.name+'  '+(pass-p0)+' ok'+(fail>f0?', '+(fail-f0)+' failed':'')); }

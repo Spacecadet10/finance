@@ -1199,7 +1199,7 @@ function settingsPanel(){
         <input type="text" data-act="set-ormodel-custom" value="${esc(orKnown?'':orModel)}" placeholder="vendor/model-name" autocomplete="off" spellcheck="false" style="font-family:var(--mono)"></label>`:''}
       <div class="muted" style="font-size:12.5px;line-height:1.6">
         One key, any model — get it at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:var(--accent)">openrouter.ai/keys</a>. The model must accept images; all of the above do. PDFs go to the model directly when it supports them, otherwise through OpenRouter's free text extraction — fine for real statements and bills, not for scanned-picture PDFs.
-        ${getKey('openrouterKey')?'<div style="margin-top:8px;color:var(--in)">Key saved (on this device only — never in backups) · scans go through OpenRouter using '+esc(aiModelLabel())+'.</div>':''}
+        ${getKey('openrouterKey')?'<div style="margin-top:8px;color:var(--in)">Key saved '+keyRestNote()+' · scans go through OpenRouter using '+esc(aiModelLabel())+'.</div>':''}
       </div>`:`
       <label class="field"><span>Anthropic API key</span>
         <input type="password" data-act="set-apikey" value="${esc(getKey('apiKey'))}" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"></label>
@@ -1207,7 +1207,7 @@ function settingsPanel(){
         <select data-act="set-aimodel">${AI_MODELS.map(m=>`<option value="${m[0]}"${(S.settings.aiModel||'claude-opus-5')===m[0]?' selected':''}>${esc(m[1])}</option>`).join('')}</select></label>
       <div class="muted" style="font-size:12.5px;line-height:1.6">
         Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="color:var(--accent)">console.anthropic.com</a>. Each read costs a few cents.
-        ${getKey('apiKey')?'<div style="margin-top:8px;color:var(--in)">Key saved (on this device only — never in backups) · scans will be read by Claude.</div>':''}
+        ${getKey('apiKey')?'<div style="margin-top:8px;color:var(--in)">Key saved '+keyRestNote()+' · scans will be read by Claude.</div>':''}
       </div>`}`;
   }
   if(settingsTab==='parsing'){
@@ -1663,9 +1663,41 @@ const OR_MODELS=[
 function aiProvider(){ return S.settings.aiProvider==='openrouter'?'openrouter':'anthropic'; }
 /* keys are device secrets: kept in their own browser-storage slot, never inside the ledger, backups, or the debug log */
 const KEYS_KEY='ledger-keys';
-function loadKeys(){ try{ return JSON.parse(window.localStorage.getItem(KEYS_KEY)||'{}')||{}; }catch(e){ return {}; } }
-function setKey(name,value){ const k=loadKeys(); if(value) k[name]=value; else delete k[name]; try{ window.localStorage.setItem(KEYS_KEY,JSON.stringify(k)); }catch(e){} }
+/* API keys live beside the book so they never travel in a backup or a shared copy. With a passphrase
+   set they are also encrypted at rest, under the same data key as the book — a reader of localStorage
+   gets an envelope, not an sk-. The decrypted copy exists only in memory, which keeps getKey()
+   synchronous for the render paths that call it. */
+let keyCache=null;
+function rawKeys(){ try{ return window.localStorage.getItem(KEYS_KEY)||''; }catch(e){ return ''; } }
+function loadKeys(){
+  if(keyCache) return keyCache;
+  const parsed=safeParse(rawKeys()||'{}');
+  if(isEnvelope(parsed)) return {};   /* sealed and not opened yet: there are no keys until the vault is open */
+  return (keyCache=(parsed&&typeof parsed==='object')?parsed:{});
+}
+/* run whenever a vault key becomes available, and when one is taken away */
+async function openKeys(){
+  const parsed=safeParse(rawKeys()||'{}');
+  if(!isEnvelope(parsed)){ keyCache=(parsed&&typeof parsed==='object')?parsed:{}; await flushKeys(); return; }   /* plain blob + a vault = seal it now */
+  if(!vaultKey) return;
+  try{ keyCache=safeParse(await decryptText(vaultKey,parsed))||{}; }
+  catch(e){ if(keyCache) await flushKeys(); }   /* a rekey: the stored blob is under the old key, the cache is still right */
+}
+async function flushKeys(){
+  const k=keyCache||{};
+  let out=JSON.stringify(k);
+  if(vaultKey&&Object.keys(k).length){
+    try{ const e=await encryptText(vaultKey,out); out=JSON.stringify({enc:1,v:2,app:'ledger-keys',iv:e.iv,ct:e.ct}); }catch(e){}
+  }
+  try{ window.localStorage.setItem(KEYS_KEY,out); }catch(e){}
+}
+function forgetKeys(){ keyCache=null; }
+function keysSealed(){ return isEnvelope(safeParse(rawKeys()||'{}')); }
+function setKey(name,value){ const k=loadKeys(); if(value) k[name]=value; else delete k[name]; keyCache=k; flushKeys(); }
 function getKey(name){ return String(loadKeys()[name]||'').trim(); }
+/* what the AI tab tells you about where the key sits */
+function keyRestNote(){ return keysSealed()?'(on this device only, encrypted with your passphrase — never in backups)':'(on this device only — never in backups; set a passphrase to encrypt it too)'; }
+
 function migrateKeysOut(){ let moved=false; ['apiKey','openrouterKey'].forEach(k=>{ if(S.settings&&S.settings[k]){ if(!getKey(k)) setKey(k,String(S.settings[k]).trim()); delete S.settings[k]; moved=true; } }); return moved; }
 function aiKey(){ return aiProvider()==='openrouter'?getKey('openrouterKey'):getKey('apiKey'); }
 function aiModel(){ return aiProvider()==='openrouter'?(S.settings.openrouterModel||'anthropic/claude-sonnet-5'):(S.settings.aiModel||'claude-opus-5'); }

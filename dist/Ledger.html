@@ -999,7 +999,7 @@ html[data-text="xl"] .sheet.wide{width:min(760px,calc(100% / 1.25))}
 <div id="modalRoot"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script>window.LEDGER_DIST={version:"2026.09.10-12",built:"2026-09-10T01:12:36.034Z"};</script>
+<script>window.LEDGER_DIST={version:"2026.09.10-13",built:"2026-09-10T01:38:51.358Z"};</script>
 <script>/**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page
@@ -1057,7 +1057,7 @@ const KEY='ledger-v1';
 const LOCK_DEFAULT=300;   /* auto-lock after five idle minutes: long enough to enter a month of transactions in peace */
 const PASS_MIN=10;   /* a shared file is an offline guessing target: ten characters minimum */
 const REIMPORT_MIN=4;   /* below this a batch is too small for "most of it matches" to mean anything */
-const APP_VERSION='2026.09.10-12';
+const APP_VERSION='2026.09.10-13';
 /* ---------- diagnostics logger: a no-op unless debug mode is on ---------- */
 const DLOG_KEY='ledger-debuglog', DLOG_MAX=1000;
 let DLOG=[], dlogTimer=null, dlogLoaded=false;
@@ -1315,7 +1315,8 @@ async function unwrapWith(wraps,secret){
   if(rec){ raw=await tryOne(wraps.salt,wraps.wrapP,secret); if(raw) return {raw:raw,how:'pass'}; }
   return {raw:null,how:''};
 }
-async function setVault(raw,wraps){ vaultRaw=raw; vaultKey=await importDataKey(raw); vaultWraps=wraps; }
+async function setVault(raw,wraps){ vaultRaw=raw; vaultKey=await importDataKey(raw); vaultWraps=wraps;
+  try{ await openKeys(); }catch(e){}   /* the API keys are sealed under this same key: open (or re-seal) them here */ }
 function clearVault(){ vaultKey=null; vaultRaw=null; vaultWraps=null; }
 /* the book as it should be WRITTEN anywhere: plain JSON without a passphrase, an envelope with one */
 async function sealState(indent){
@@ -5011,7 +5012,7 @@ function settingsPanel(){
         <input type="text" data-act="set-ormodel-custom" value="${esc(orKnown?'':orModel)}" placeholder="vendor/model-name" autocomplete="off" spellcheck="false" style="font-family:var(--mono)"></label>`:''}
       <div class="muted" style="font-size:12.5px;line-height:1.6">
         One key, any model — get it at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:var(--accent)">openrouter.ai/keys</a>. The model must accept images; all of the above do. PDFs go to the model directly when it supports them, otherwise through OpenRouter's free text extraction — fine for real statements and bills, not for scanned-picture PDFs.
-        ${getKey('openrouterKey')?'<div style="margin-top:8px;color:var(--in)">Key saved (on this device only — never in backups) · scans go through OpenRouter using '+esc(aiModelLabel())+'.</div>':''}
+        ${getKey('openrouterKey')?'<div style="margin-top:8px;color:var(--in)">Key saved '+keyRestNote()+' · scans go through OpenRouter using '+esc(aiModelLabel())+'.</div>':''}
       </div>`:`
       <label class="field"><span>Anthropic API key</span>
         <input type="password" data-act="set-apikey" value="${esc(getKey('apiKey'))}" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"></label>
@@ -5019,7 +5020,7 @@ function settingsPanel(){
         <select data-act="set-aimodel">${AI_MODELS.map(m=>`<option value="${m[0]}"${(S.settings.aiModel||'claude-opus-5')===m[0]?' selected':''}>${esc(m[1])}</option>`).join('')}</select></label>
       <div class="muted" style="font-size:12.5px;line-height:1.6">
         Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="color:var(--accent)">console.anthropic.com</a>. Each read costs a few cents.
-        ${getKey('apiKey')?'<div style="margin-top:8px;color:var(--in)">Key saved (on this device only — never in backups) · scans will be read by Claude.</div>':''}
+        ${getKey('apiKey')?'<div style="margin-top:8px;color:var(--in)">Key saved '+keyRestNote()+' · scans will be read by Claude.</div>':''}
       </div>`}`;
   }
   if(settingsTab==='parsing'){
@@ -5475,9 +5476,41 @@ const OR_MODELS=[
 function aiProvider(){ return S.settings.aiProvider==='openrouter'?'openrouter':'anthropic'; }
 /* keys are device secrets: kept in their own browser-storage slot, never inside the ledger, backups, or the debug log */
 const KEYS_KEY='ledger-keys';
-function loadKeys(){ try{ return JSON.parse(window.localStorage.getItem(KEYS_KEY)||'{}')||{}; }catch(e){ return {}; } }
-function setKey(name,value){ const k=loadKeys(); if(value) k[name]=value; else delete k[name]; try{ window.localStorage.setItem(KEYS_KEY,JSON.stringify(k)); }catch(e){} }
+/* API keys live beside the book so they never travel in a backup or a shared copy. With a passphrase
+   set they are also encrypted at rest, under the same data key as the book — a reader of localStorage
+   gets an envelope, not an sk-. The decrypted copy exists only in memory, which keeps getKey()
+   synchronous for the render paths that call it. */
+let keyCache=null;
+function rawKeys(){ try{ return window.localStorage.getItem(KEYS_KEY)||''; }catch(e){ return ''; } }
+function loadKeys(){
+  if(keyCache) return keyCache;
+  const parsed=safeParse(rawKeys()||'{}');
+  if(isEnvelope(parsed)) return {};   /* sealed and not opened yet: there are no keys until the vault is open */
+  return (keyCache=(parsed&&typeof parsed==='object')?parsed:{});
+}
+/* run whenever a vault key becomes available, and when one is taken away */
+async function openKeys(){
+  const parsed=safeParse(rawKeys()||'{}');
+  if(!isEnvelope(parsed)){ keyCache=(parsed&&typeof parsed==='object')?parsed:{}; await flushKeys(); return; }   /* plain blob + a vault = seal it now */
+  if(!vaultKey) return;
+  try{ keyCache=safeParse(await decryptText(vaultKey,parsed))||{}; }
+  catch(e){ if(keyCache) await flushKeys(); }   /* a rekey: the stored blob is under the old key, the cache is still right */
+}
+async function flushKeys(){
+  const k=keyCache||{};
+  let out=JSON.stringify(k);
+  if(vaultKey&&Object.keys(k).length){
+    try{ const e=await encryptText(vaultKey,out); out=JSON.stringify({enc:1,v:2,app:'ledger-keys',iv:e.iv,ct:e.ct}); }catch(e){}
+  }
+  try{ window.localStorage.setItem(KEYS_KEY,out); }catch(e){}
+}
+function forgetKeys(){ keyCache=null; }
+function keysSealed(){ return isEnvelope(safeParse(rawKeys()||'{}')); }
+function setKey(name,value){ const k=loadKeys(); if(value) k[name]=value; else delete k[name]; keyCache=k; flushKeys(); }
 function getKey(name){ return String(loadKeys()[name]||'').trim(); }
+/* what the AI tab tells you about where the key sits */
+function keyRestNote(){ return keysSealed()?'(on this device only, encrypted with your passphrase — never in backups)':'(on this device only — never in backups; set a passphrase to encrypt it too)'; }
+
 function migrateKeysOut(){ let moved=false; ['apiKey','openrouterKey'].forEach(k=>{ if(S.settings&&S.settings[k]){ if(!getKey(k)) setKey(k,String(S.settings[k]).trim()); delete S.settings[k]; moved=true; } }); return moved; }
 function aiKey(){ return aiProvider()==='openrouter'?getKey('openrouterKey'):getKey('apiKey'); }
 function aiModel(){ return aiProvider()==='openrouter'?(S.settings.openrouterModel||'anthropic/claude-sonnet-5'):(S.settings.aiModel||'claude-opus-5'); }
@@ -5519,7 +5552,8 @@ async function hashPass(pw){
   return 'fnv:'+((h>>>0).toString(16).padStart(8,'0'))+((Math.imul(h,2654435761)>>>0).toString(16).padStart(8,'0'));
 }
 async function setLockPassphrase(pw){
-  if(!pw){ clearLock(); clearVault(); vaultPass=''; await saveNow(); scheduleBackupWrite(); return ''; }
+  if(!pw){ clearLock(); clearVault(); vaultPass=''; try{ await flushKeys(); }catch(e){}   /* no key left to seal them with: back to plain, still out of the book */
+    await saveNow(); scheduleBackupWrite(); return ''; }
   if(!cryptoOK()) throw new Error('this browser has no Web Crypto, so the book cannot be encrypted here');
   if(String(pw).length<PASS_MIN) throw new Error('use at least '+PASS_MIN+' characters');
   const raw=crypto.getRandomValues(new Uint8Array(32)); const code=newRecoveryCode();
@@ -5558,7 +5592,7 @@ async function lockDown(){
   if(!vaultKey&&!hasLock()) return;
   try{ if(!lockWiped) await saveNow(); }catch(e){}
   clearTimeout(backupTimer); clearTimeout(dlogTimer);   /* a queued write would now see an empty book */
-  clearVault(); vaultPass=''; pendingRecovery=''; undoSnap=null; reviewSnap=''; revRows=[]; shots=[]; importTrace=null; S=freshState(); S.settings.onboarded=true; lockWiped=true;
+  clearVault(); forgetKeys(); vaultPass=''; pendingRecovery=''; undoSnap=null; reviewSnap=''; revRows=[]; shots=[]; importTrace=null; S=freshState(); S.settings.onboarded=true; lockWiped=true;
   try{ const b=document.getElementById('board'); if(b) b.innerHTML=''; const t=document.getElementById('toast'); if(t){ t.innerHTML=''; t.classList.remove('show'); } closeModal(); }catch(e){}
 }
 function showLock(sub){
@@ -8264,7 +8298,7 @@ document.addEventListener('drop',e=>{
 });
 
 /* test hook — read-only access to the engine for the automated tests in tests/ */
-window.__ledger={get S(){return S;},get stagedAccount(){return stagedAccount;},set commitFailAt(v){commitFailAt=v;},saveNow,discardReview,absorbIntoAnchors,unreadLines,twinTransfer,dayBefore,openingFloor,rebookByNumber,lineNamesAccount,numberedAccount,RX_OWN_SCREEN,shotKindClash,isCardPayIn,unsourcedPayments,summaryKey,get myRev(){return myRev;},get staleTab(){return staleTab;},storedRev,unreconciledLiabilities,netWorthIncompleteNote,incomeRecognised,allocSign,applyRestore,txById,isReversal,isReversed,reversalPartner,reversalPairOk,linkReversal,unlinkReversal,reversalCandidates,autoLinkReversals,economicIn,economicOut,reversalLabel,saysReversal,todayISO,unreconciledNote,PDFJS_VERSION,PDFJS_DIR,ensurePdfjs,pdfItemsToText,extractPdfText,get pdfPagesRead(){return pdfPagesRead;},segmentStatement,statementPeriod,parseOCRText,appOrigin,isCanonical,originLabel,originBadge,CANONICAL_URL,statementReconcile,refreshCommitGate,bankHint,merchantPart,channelOf,guessCategory,detectAcctType,statementHeader,matchAccounts,inDebtPlan,debts,debtCandidates,setDebtPlanFlag,simulate,offerLoanLink,monthFlows,allocLabel,allocAssigned,setCheckpoint,allocOf,isLoanPayment,allocPrincipal,allocExpenses,allocEscrow,allocUnresolved,allocState,allocSummary,spendParts,monthLoanPrincipal,monthUnresolved,isInstallmentLoan,proposeAllocation,applyAllocationProposal,isFuture,futureCheckpoints,countsFor,netWorthAt,netWorthSeries,netWorthSeriesAt,valueAt,existsAt,historyStart,undatedAccounts,monthEnd,monthsBack,shiftMonth,balanceSheet,untypedAccounts,suggestAcctType,linksOf,acctGroup,typeKind,acctTypeLabel,ACCT_TYPES,addShotFiles,contentHash,classifyDups,isDup,dupLevel,descKey,srcKey,refFromText,txFingerprint,netWorth,hintType,suggestAccount,applyAccountSemantics,get revRows(){return revRows;},recatPreview,recatApply,transferTargets,getKey,setKey,guessCategory,uncatId,dlog,get DLOG(){ if(!dlogLoaded) loadDlog(); return DLOG; },clearDlog,integrityCheck,explainRules,balanceExplain,repairPlans,fullBackupDiagnostic,validateBackupShape,get importTrace(){return importTrace;},APP_VERSION,detectRecurring,merchantKey,suggestionToRecurring,balanceAsOf,historyFP,closeStatus,closeReview,ensureClose,occurrences,nextDue,removeCheckpoint,governingCheckpoint,effectOn,derivedBalance,recalcBalances,ensureAnchors,setCheckpoint,setBalanceTo,balanceReport,anchorOf,sniffHint,matchAccount,get hint(){return shotHint;},extractWithOpenRouter,extractWithClaude,aiProvider,aiKey,aiModel,get backup(){return {state:backupState,kind:backupKind,lastDiskWrite:lastDiskWrite,lastLocalSave:lastLocalSave,verified:lastDiskVerified,error:lastDiskError,diag:backupDiag};},writeBackupFile,backupSelfTest,get ui(){return ui;},get lastFocus(){return lastFocus;},get lockWiped(){return lockWiped;},lockDown,resealBackups,passphraseSetupForm,LOCK_DEFAULT,PASS_MIN,cat,lockOffer,mergePlan,mergeBook,extractBookText,guideSteps,THEMES,themeOf,sealState,openSealed,isEnvelope,vaultOn,setLockPassphrase,verifyLockPassphrase,unlockWith,changePassphrase,newRecoveryCodeForVault,looksLikeRecovery,normRecovery,lockEncrypts,loadLock,applyRestore,get lastUnlockHow(){return lastUnlockHow;},get pendingUnlock(){return !!pendingUnlock;},personForm,removePerson,MAX_USERS,selfHTML,embeddedBook,adoptEmbeddedData,exportSelf,isDist,isCanonical,appOrigin,toBase,rateOf,bulkAssignMatches,get bulkUI(){return bulkUI;},bulkAssignApply,bulkAssignPreview,inMonth,inMonthMine,monthFlowsMine,flowsOf,householdRows,filteredUserId,memberFilterOn,txUserVisible,runRecurring,matchRule,applyRule,rulesRunPreview,merchantGuess,projection,goalMath,avgFlows,avgNeed,simulate,save,render,refreshWhatIf,load,healState,html,uid,esc};
+window.__ledger={get S(){return S;},get stagedAccount(){return stagedAccount;},set commitFailAt(v){commitFailAt=v;},saveNow,discardReview,absorbIntoAnchors,unreadLines,twinTransfer,dayBefore,openingFloor,rebookByNumber,lineNamesAccount,numberedAccount,RX_OWN_SCREEN,shotKindClash,isCardPayIn,unsourcedPayments,summaryKey,get myRev(){return myRev;},get staleTab(){return staleTab;},storedRev,unreconciledLiabilities,netWorthIncompleteNote,incomeRecognised,allocSign,applyRestore,txById,isReversal,isReversed,reversalPartner,reversalPairOk,linkReversal,unlinkReversal,reversalCandidates,autoLinkReversals,economicIn,economicOut,reversalLabel,saysReversal,todayISO,unreconciledNote,PDFJS_VERSION,PDFJS_DIR,ensurePdfjs,pdfItemsToText,extractPdfText,get pdfPagesRead(){return pdfPagesRead;},segmentStatement,statementPeriod,parseOCRText,appOrigin,isCanonical,originLabel,originBadge,CANONICAL_URL,statementReconcile,refreshCommitGate,bankHint,merchantPart,channelOf,guessCategory,detectAcctType,statementHeader,matchAccounts,inDebtPlan,debts,debtCandidates,setDebtPlanFlag,simulate,offerLoanLink,monthFlows,allocLabel,allocAssigned,setCheckpoint,allocOf,isLoanPayment,allocPrincipal,allocExpenses,allocEscrow,allocUnresolved,allocState,allocSummary,spendParts,monthLoanPrincipal,monthUnresolved,isInstallmentLoan,proposeAllocation,applyAllocationProposal,isFuture,futureCheckpoints,countsFor,netWorthAt,netWorthSeries,netWorthSeriesAt,valueAt,existsAt,historyStart,undatedAccounts,monthEnd,monthsBack,shiftMonth,balanceSheet,untypedAccounts,suggestAcctType,linksOf,acctGroup,typeKind,acctTypeLabel,ACCT_TYPES,addShotFiles,contentHash,classifyDups,isDup,dupLevel,descKey,srcKey,refFromText,txFingerprint,netWorth,hintType,suggestAccount,applyAccountSemantics,get revRows(){return revRows;},recatPreview,recatApply,transferTargets,getKey,setKey,openKeys,flushKeys,forgetKeys,keysSealed,guessCategory,uncatId,dlog,get DLOG(){ if(!dlogLoaded) loadDlog(); return DLOG; },clearDlog,integrityCheck,explainRules,balanceExplain,repairPlans,fullBackupDiagnostic,validateBackupShape,get importTrace(){return importTrace;},APP_VERSION,detectRecurring,merchantKey,suggestionToRecurring,balanceAsOf,historyFP,closeStatus,closeReview,ensureClose,occurrences,nextDue,removeCheckpoint,governingCheckpoint,effectOn,derivedBalance,recalcBalances,ensureAnchors,setCheckpoint,setBalanceTo,balanceReport,anchorOf,sniffHint,matchAccount,get hint(){return shotHint;},extractWithOpenRouter,extractWithClaude,aiProvider,aiKey,aiModel,get backup(){return {state:backupState,kind:backupKind,lastDiskWrite:lastDiskWrite,lastLocalSave:lastLocalSave,verified:lastDiskVerified,error:lastDiskError,diag:backupDiag};},writeBackupFile,backupSelfTest,get ui(){return ui;},get lastFocus(){return lastFocus;},get lockWiped(){return lockWiped;},lockDown,resealBackups,passphraseSetupForm,LOCK_DEFAULT,PASS_MIN,cat,lockOffer,mergePlan,mergeBook,extractBookText,guideSteps,THEMES,themeOf,sealState,openSealed,isEnvelope,vaultOn,setLockPassphrase,verifyLockPassphrase,unlockWith,changePassphrase,newRecoveryCodeForVault,looksLikeRecovery,normRecovery,lockEncrypts,loadLock,applyRestore,get lastUnlockHow(){return lastUnlockHow;},get pendingUnlock(){return !!pendingUnlock;},personForm,removePerson,MAX_USERS,selfHTML,embeddedBook,adoptEmbeddedData,exportSelf,isDist,isCanonical,appOrigin,toBase,rateOf,bulkAssignMatches,get bulkUI(){return bulkUI;},bulkAssignApply,bulkAssignPreview,inMonth,inMonthMine,monthFlowsMine,flowsOf,householdRows,filteredUserId,memberFilterOn,txUserVisible,runRecurring,matchRule,applyRule,rulesRunPreview,merchantGuess,projection,goalMath,avgFlows,avgNeed,simulate,save,render,refreshWhatIf,load,healState,html,uid,esc};
 
 /* ============================ boot ============================ */
 /* scheduled backup: on boot, if 30+ days since last backup and 25+ transactions,

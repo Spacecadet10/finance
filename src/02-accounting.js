@@ -45,7 +45,8 @@ async function unwrapWith(wraps,secret){
   if(rec){ raw=await tryOne(wraps.salt,wraps.wrapP,secret); if(raw) return {raw:raw,how:'pass'}; }
   return {raw:null,how:''};
 }
-async function setVault(raw,wraps){ vaultRaw=raw; vaultKey=await importDataKey(raw); vaultWraps=wraps; }
+async function setVault(raw,wraps){ vaultRaw=raw; vaultKey=await importDataKey(raw); vaultWraps=wraps;
+  try{ await openKeys(); }catch(e){}   /* the API keys are sealed under this same key: open (or re-seal) them here */ }
 function clearVault(){ vaultKey=null; vaultRaw=null; vaultWraps=null; }
 /* the book as it should be WRITTEN anywhere: plain JSON without a passphrase, an envelope with one */
 async function sealState(indent){

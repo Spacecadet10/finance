@@ -33,7 +33,8 @@ async function hashPass(pw){
   return 'fnv:'+((h>>>0).toString(16).padStart(8,'0'))+((Math.imul(h,2654435761)>>>0).toString(16).padStart(8,'0'));
 }
 async function setLockPassphrase(pw){
-  if(!pw){ clearLock(); clearVault(); vaultPass=''; await saveNow(); scheduleBackupWrite(); return ''; }
+  if(!pw){ clearLock(); clearVault(); vaultPass=''; try{ await flushKeys(); }catch(e){}   /* no key left to seal them with: back to plain, still out of the book */
+    await saveNow(); scheduleBackupWrite(); return ''; }
   if(!cryptoOK()) throw new Error('this browser has no Web Crypto, so the book cannot be encrypted here');
   if(String(pw).length<PASS_MIN) throw new Error('use at least '+PASS_MIN+' characters');
   const raw=crypto.getRandomValues(new Uint8Array(32)); const code=newRecoveryCode();
@@ -72,7 +73,7 @@ async function lockDown(){
   if(!vaultKey&&!hasLock()) return;
   try{ if(!lockWiped) await saveNow(); }catch(e){}
   clearTimeout(backupTimer); clearTimeout(dlogTimer);   /* a queued write would now see an empty book */
-  clearVault(); vaultPass=''; pendingRecovery=''; undoSnap=null; reviewSnap=''; revRows=[]; shots=[]; importTrace=null; S=freshState(); S.settings.onboarded=true; lockWiped=true;
+  clearVault(); forgetKeys(); vaultPass=''; pendingRecovery=''; undoSnap=null; reviewSnap=''; revRows=[]; shots=[]; importTrace=null; S=freshState(); S.settings.onboarded=true; lockWiped=true;
   try{ const b=document.getElementById('board'); if(b) b.innerHTML=''; const t=document.getElementById('toast'); if(t){ t.innerHTML=''; t.classList.remove('show'); } closeModal(); }catch(e){}
 }
 function showLock(sub){
