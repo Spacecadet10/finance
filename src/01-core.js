@@ -8,7 +8,7 @@
 const KEY='ledger-v1';
 const LOCK_DEFAULT=300;   /* auto-lock after five idle minutes: long enough to enter a month of transactions in peace */
 const PASS_MIN=10;   /* a shared file is an offline guessing target: ten characters minimum */
-const APP_VERSION='2026.09.10-10';
+const APP_VERSION='2026.09.10-11';
 /* ---------- diagnostics logger: a no-op unless debug mode is on ---------- */
 const DLOG_KEY='ledger-debuglog', DLOG_MAX=1000;
 let DLOG=[], dlogTimer=null, dlogLoaded=false;

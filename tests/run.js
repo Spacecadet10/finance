@@ -695,6 +695,22 @@ suite('sample data',async()=>{
   const ic=L.integrityCheck(); eq(ic.checks.filter(c=>c.status==='fail').map(c=>c.name),[],'sample book passes integrity'); eq(errors.length,0,'no errors');
 });
 
+suite('top-bar lock button',async()=>{
+  const {L,S,d,w,act,errors}=await boot();
+  const btn=d.getElementById('lockBtn');
+  check(!!btn,'the header carries a lock button');
+  eq(btn.dataset.act,'lock-now','it fires the lock action');
+  check(!!btn.querySelector('svg'),'it draws a padlock, not a text glyph');
+  check(btn.getAttribute('aria-label')&&btn.title,'it is labelled for screen readers and on hover');
+  L.render(); check(btn.hidden,'hidden while no passphrase is set');
+  /* a lock record is all the button keys off — no need to spend PBKDF2 here */
+  w.localStorage.setItem('ledger-lock',JSON.stringify({hash:'legacy',timeout:300}));
+  L.render(); check(!btn.hidden,'shown once a passphrase exists');
+  w.localStorage.removeItem('ledger-lock');
+  L.render(); check(btn.hidden,'hidden again when the passphrase is removed');
+  eq(errors.length,0,'no errors');
+});
+
 (async()=>{
   const only=process.argv.slice(2);
   for(const s of suites){ if(only.length&&!only.some(o=>s.name.indexOf(o)>=0)) continue; cur=s.name; const p0=pass,f0=fail; try{ await s.fn(); }catch(e){ fail++; failures.push(cur+': threw '+e.message); console.log('  FAIL '+cur+': threw '+(e.stack||e.message).split('\n').slice(0,2).join(' | ')); } console.log((fail>f0?'✗ ':'✓ ')+s.name+'  '+(pass-p0)+' ok'+(fail>f0?', '+(fail-f0)+' failed':'')); }

@@ -447,7 +447,7 @@ body{
 }
 .iconbtn{
   border:0;background:transparent;color:var(--ink-2);cursor:pointer;
-  width:30px;height:28px;border-radius:6px;font-size:15px;line-height:1;
+  width:36px;height:34px;border-radius:7px;font-size:18px;line-height:1;
   display:grid;place-items:center;font-family:var(--ui);
 }
 .iconbtn:hover{background:var(--surface-2);color:var(--ink)}
@@ -939,6 +939,7 @@ html[data-text="xl"] .sheet.wide{width:min(760px,calc(100% / 1.25))}
     </div>
     <button class="btn btn-primary" data-act="import-shots" title="Upload or paste bills, receipts, statements, screenshots — Ledger fills in the transactions">Scan a bill / screenshot</button>
     <button class="btn" data-act="add-tx" id="addTxBtn">Add transaction</button>
+    <button class="iconbtn" id="lockBtn" data-act="lock-now" aria-label="Lock Ledger" title="Lock Ledger now" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></button>
     <button class="iconbtn" data-act="toggle-theme" aria-label="Switch theme" title="Switch theme">◐</button>
     <button class="iconbtn" data-act="open-settings" aria-label="Settings" title="Settings">⚙</button>
   </div>
@@ -980,6 +981,7 @@ html[data-text="xl"] .sheet.wide{width:min(760px,calc(100% / 1.25))}
     </div>
     <button class="btn btn-primary" data-act="import-shots" title="Upload or paste bills, receipts, statements, screenshots — Ledger fills in the transactions">Scan a bill / screenshot</button>
     <button class="btn" data-act="add-tx" id="addTxBtn">Add transaction</button>
+    <button class="iconbtn" id="lockBtn" data-act="lock-now" aria-label="Lock Ledger" title="Lock Ledger now" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></button>
     <button class="iconbtn" data-act="toggle-theme" aria-label="Switch theme" title="Switch theme">◐</button>
     <button class="iconbtn" data-act="open-settings" aria-label="Settings" title="Settings">⚙</button>
   </div>
@@ -997,7 +999,7 @@ html[data-text="xl"] .sheet.wide{width:min(760px,calc(100% / 1.25))}
 <div id="modalRoot"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script>window.LEDGER_DIST={version:"2026.09.10-10",built:"2026-09-10T00:52:35.996Z"};</script>
+<script>window.LEDGER_DIST={version:"2026.09.10-11",built:"2026-09-10T00:55:54.622Z"};</script>
 <script>/**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page
@@ -1054,7 +1056,7 @@ html[data-text="xl"] .sheet.wide{width:min(760px,calc(100% / 1.25))}
 const KEY='ledger-v1';
 const LOCK_DEFAULT=300;   /* auto-lock after five idle minutes: long enough to enter a month of transactions in peace */
 const PASS_MIN=10;   /* a shared file is an offline guessing target: ten characters minimum */
-const APP_VERSION='2026.09.10-10';
+const APP_VERSION='2026.09.10-11';
 /* ---------- diagnostics logger: a no-op unless debug mode is on ---------- */
 const DLOG_KEY='ledger-debuglog', DLOG_MAX=1000;
 let DLOG=[], dlogTimer=null, dlogLoaded=false;
@@ -3748,6 +3750,8 @@ function render(){
   updateSaveStat();
   $('#monthLabel').textContent=monthName(ui.month,true);
   $('#todayBtn').hidden=(ui.month===ym(new Date()));
+  /* the lock lives in the top bar, not buried in Settings — but only once there is a passphrase to lock with */
+  { const lb=$('#lockBtn'); if(lb) lb.hidden=!hasLock(); }
   const uf=$('#userFilter');
   if(uf){
     const cur=ui.user||'all';
@@ -7792,13 +7796,13 @@ document.addEventListener('click',function(e){
         try{
           const code=await setLockPassphrase(pw1.value);
           toast('Passphrase set — your book is encrypted from now on');
-          refreshSettings();
+          refreshSettings(); render();   /* the top-bar lock appears as soon as there is something to lock */
           recoverySheet(code,'new');
         }catch(e){ console.error('Lock set failed',e); toast('Could not set passphrase: '+e.message); }
       })();
       break;
     }
-    case 'lock-remove': (async()=>{ try{ await setLockPassphrase(''); toast('Passphrase removed — the book is stored readable again'); }catch(e){ toast('Could not remove: '+errStr(e)); } refreshSettings(); })(); break;
+    case 'lock-remove': (async()=>{ try{ await setLockPassphrase(''); toast('Passphrase removed — the book is stored readable again'); }catch(e){ toast('Could not remove: '+errStr(e)); } refreshSettings(); render(); })(); break;
     case 'lock-now': showLock(); break;
     case 'lock-change': newPassphraseForm('Choose the new passphrase. Your recovery code stays valid.'); break;
     case 'lock-recovery': passphrasePrompt('Make a new recovery code','Enter your passphrase first. The book is re-encrypted; the old recovery code opens nothing saved from now on. The new code is shown once.',async pw=>{ const how=await unlockWith(pw); if(how!=='pass'){ toast('Wrong passphrase'); return; } try{ const c=await newRecoveryCodeForVault(pw); recoverySheet(c,'new'); }catch(e){ toast('Could not make one: '+errStr(e)); } }); break;

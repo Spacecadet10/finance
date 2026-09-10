@@ -1093,6 +1093,8 @@ function render(){
   updateSaveStat();
   $('#monthLabel').textContent=monthName(ui.month,true);
   $('#todayBtn').hidden=(ui.month===ym(new Date()));
+  /* the lock lives in the top bar, not buried in Settings — but only once there is a passphrase to lock with */
+  { const lb=$('#lockBtn'); if(lb) lb.hidden=!hasLock(); }
   const uf=$('#userFilter');
   if(uf){
     const cur=ui.user||'all';

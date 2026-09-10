@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledger — personal finance dashboard</title>
 <link rel="stylesheet" href="vendor/fonts.css">
-<link rel="stylesheet" href="ledger.css?v=9">
+<link rel="stylesheet" href="ledger.css?v=10">
 </head>
 <body>
 
@@ -30,6 +30,7 @@
     </div>
     <button class="btn btn-primary" data-act="import-shots" title="Upload or paste bills, receipts, statements, screenshots — Ledger fills in the transactions">Scan a bill / screenshot</button>
     <button class="btn" data-act="add-tx" id="addTxBtn">Add transaction</button>
+    <button class="iconbtn" id="lockBtn" data-act="lock-now" aria-label="Lock Ledger" title="Lock Ledger now" hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></button>
     <button class="iconbtn" data-act="toggle-theme" aria-label="Switch theme" title="Switch theme">◐</button>
     <button class="iconbtn" data-act="open-settings" aria-label="Settings" title="Settings">⚙</button>
   </div>
@@ -47,12 +48,12 @@
 <div id="modalRoot"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="src/01-core.js?v=6"></script>
-<script src="src/02-accounting.js?v=6"></script>
-<script src="src/03-model.js?v=6"></script>
-<script src="src/04-widgets.js?v=6"></script>
-<script src="src/05-dialogs.js?v=6"></script>
-<script src="src/06-import.js?v=6"></script>
-<script src="src/07-app.js?v=6"></script>
+<script src="src/01-core.js?v=7"></script>
+<script src="src/02-accounting.js?v=7"></script>
+<script src="src/03-model.js?v=7"></script>
+<script src="src/04-widgets.js?v=7"></script>
+<script src="src/05-dialogs.js?v=7"></script>
+<script src="src/06-import.js?v=7"></script>
+<script src="src/07-app.js?v=7"></script>
 </body>
 </html>

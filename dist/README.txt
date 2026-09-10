@@ -1,4 +1,4 @@
-Ledger — personal finance dashboard (version 2026.09.10-10)
+Ledger — personal finance dashboard (version 2026.09.10-11)
 
 WHAT THIS IS
 One file, Ledger.html, is the whole app. Nothing is installed and nothing is sent anywhere:

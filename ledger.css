@@ -432,7 +432,7 @@ body{
 }
 .iconbtn{
   border:0;background:transparent;color:var(--ink-2);cursor:pointer;
-  width:30px;height:28px;border-radius:6px;font-size:15px;line-height:1;
+  width:36px;height:34px;border-radius:7px;font-size:18px;line-height:1;
   display:grid;place-items:center;font-family:var(--ui);
 }
 .iconbtn:hover{background:var(--surface-2);color:var(--ink)}

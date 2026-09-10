@@ -538,13 +538,13 @@ document.addEventListener('click',function(e){
         try{
           const code=await setLockPassphrase(pw1.value);
           toast('Passphrase set — your book is encrypted from now on');
-          refreshSettings();
+          refreshSettings(); render();   /* the top-bar lock appears as soon as there is something to lock */
           recoverySheet(code,'new');
         }catch(e){ console.error('Lock set failed',e); toast('Could not set passphrase: '+e.message); }
       })();
       break;
     }
-    case 'lock-remove': (async()=>{ try{ await setLockPassphrase(''); toast('Passphrase removed — the book is stored readable again'); }catch(e){ toast('Could not remove: '+errStr(e)); } refreshSettings(); })(); break;
+    case 'lock-remove': (async()=>{ try{ await setLockPassphrase(''); toast('Passphrase removed — the book is stored readable again'); }catch(e){ toast('Could not remove: '+errStr(e)); } refreshSettings(); render(); })(); break;
     case 'lock-now': showLock(); break;
     case 'lock-change': newPassphraseForm('Choose the new passphrase. Your recovery code stays valid.'); break;
     case 'lock-recovery': passphrasePrompt('Make a new recovery code','Enter your passphrase first. The book is re-encrypted; the old recovery code opens nothing saved from now on. The new code is shown once.',async pw=>{ const how=await unlockWith(pw); if(how!=='pass'){ toast('Wrong passphrase'); return; } try{ const c=await newRecoveryCodeForVault(pw); recoverySheet(c,'new'); }catch(e){ toast('Could not make one: '+errStr(e)); } }); break;
